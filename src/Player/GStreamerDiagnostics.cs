@@ -23,11 +23,12 @@ internal static class GStreamerDiagnostics
 
             using var player = new GstPlayer();
             player.Initialize();
+            Console.WriteLine($"GStreamer library: {GStreamerNative.LoadedGStreamerPath}");
             if (!player.IsAvailable)
             {
-                throw new InvalidOperationException("GStreamer could not initialize its playback pipeline. Install the matching GStreamer runtime and plugins.");
+                throw new InvalidOperationException($"GStreamer could not initialize its playback pipeline.{Environment.NewLine}" +
+                    (player.InitializationError ?? "No additional initialization error was reported."));
             }
-            Console.WriteLine($"GStreamer library: {GStreamerNative.LoadedGStreamerPath}");
             if (OperatingSystem.IsMacOS() && !GStreamerNative.HasElementFactory("osxaudiosink"))
             {
                 throw new InvalidOperationException("The macOS CoreAudio plugin (osxaudiosink) is missing.");

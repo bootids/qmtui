@@ -51,7 +51,7 @@ internal static partial class GStreamerNative
             {
                 return s_libraries.TryGetValue(GstLibrary, out var library)
                     ? library.Path
-                    : $"system library: {GstLibrary}";
+                    : OperatingSystem.IsMacOS() ? "not loaded" : $"system library: {GstLibrary}";
             }
         }
     }

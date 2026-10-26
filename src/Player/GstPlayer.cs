@@ -45,6 +45,7 @@ public sealed partial class GstPlayer : IPlayer
     }
 
     public bool IsAvailable => _pipeline != 0;
+    public string? InitializationError { get; private set; }
     public bool IsPlaying { get; private set; }
     public double CurrentPositionSeconds { get; private set; }
     public double TotalDurationSeconds { get; private set; }
@@ -58,6 +59,7 @@ public sealed partial class GstPlayer : IPlayer
     /// </summary>
     public void Initialize()
     {
+        InitializationError = null;
         try
         {
             GStreamerNative.Initialize();
@@ -99,7 +101,8 @@ public sealed partial class GstPlayer : IPlayer
                 }
                 else
                 {
-                    AppLogger.Error("GstPlayer", "Failed to create GStreamer playbin pipeline");
+                    InitializationError = "GStreamer could not create the playbin element. Check that the playback plugins are installed and discoverable.";
+                    AppLogger.Error("GstPlayer", InitializationError);
                 }
             }
 
@@ -110,11 +113,13 @@ public sealed partial class GstPlayer : IPlayer
         }
         catch (DllNotFoundException dllEx)
         {
+            InitializationError = dllEx.ToString();
             AppLogger.Warn("GstPlayer", $"GStreamer library {LibGst} not found on this system: {dllEx.Message}");
             ReleaseFailedPipeline();
         }
         catch (Exception ex)
         {
+            InitializationError = ex.ToString();
             AppLogger.Error("GstPlayer", "Exception during GStreamer initialization", ex);
             ReleaseFailedPipeline();
         }
