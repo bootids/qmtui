@@ -40,7 +40,7 @@ for component in "$STAGE_DIR/runtime/"*.pkg; do
     [ -f "$component/PackageInfo" ] || fail "Runtime component has no PackageInfo: $component"
     if [ "$(basename "$component")" = "osx-framework-1.28.8-universal.pkg" ]; then
         echo "==> Correcting upstream framework root permissions (0700 -> 0755)..."
-        "$HELPER_DIR/normalize-framework-component.sh" "$component" "$STAGE_DIR/framework-fix"
+        bash "$HELPER_DIR/normalize-framework-component.sh" "$component" "$STAGE_DIR/framework-fix"
     fi
     pkgutil --flatten "$component" "$STAGE_DIR/packages/$(basename "$component")"
     COMPONENT_COUNT=$((COMPONENT_COUNT + 1))
