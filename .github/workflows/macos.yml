@@ -69,6 +69,9 @@ jobs:
       - name: Verify installed Native AOT audio decoding
         run: /usr/local/bin/qmtui --check-audio
 
+      - name: Verify macOS Now Playing and remote-command integration
+        run: /usr/local/bin/qmtui --check-media-session --debug
+
       - name: Verify interactive terminal startup and clean exit
         run: python3 scripts/macos/smoke-tui.py /usr/local/bin/qmtui
 
@@ -153,10 +156,12 @@ jobs:
           - `.pkg` 包含官方 GStreamer 1.28.8 音频运行库，并安装到 `/Library/Frameworks/GStreamer.framework`。
           - `.tar.gz` 仅包含 qmtui，本地播放另需安装 GStreamer。
           - 可运行 `qmtui --check-audio` 检查音频解码。此检查使用静音输出，不验证物理扬声器。
+          - 0.4.6 修复系统“正在播放”的状态同步与控制回调：在原生主线程运行 Cocoa 事件循环，统一发布歌曲、暂停与跳转状态。升级后请退出旧 qmtui 进程再启动新版。
+          - 可运行 `qmtui --check-media-session` 检查原生媒体会话、主线程派发和控制回调；检查会短暂发布测试歌曲信息并清除，不播放音频。
           - 当前未使用 Apple Developer ID 签名或公证；若系统阻止安装，请在“系统设置 → 隐私与安全性”中允许本次打开。
           - macOS 暂不支持 Linux PulseAudio 专用的实时录音识曲和后台预录；文件识曲可用。
 
-          构建流程已在 macOS ARM64 runner 上验证完整安装、测试套件、发布后二进制音频解码，以及终端启动与退出。在线音乐播放仍取决于用户自己的登录状态和服务端权限。
+          构建流程已在 macOS ARM64 runner 上验证完整安装、测试套件、发布后二进制音频解码、MediaPlayer 元数据读回与控制回调，以及终端启动与退出。媒体会话检查不自动操作控制中心界面或硬件媒体键；在线音乐播放仍取决于用户自己的登录状态和服务端权限。
           NOTES
           echo >> release-notes.md
           echo "Source commit: $GITHUB_SHA" >> release-notes.md

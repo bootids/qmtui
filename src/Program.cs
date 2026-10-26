@@ -13,7 +13,7 @@ public static partial class Program
     {
         if (args.Contains("--version") || args.Contains("-v"))
         {
-            Console.WriteLine("qmtui 0.4.5");
+            Console.WriteLine("qmtui 0.4.6");
             return;
         }
 
@@ -32,6 +32,7 @@ public static partial class Program
             Console.WriteLine("  --no-audio           Disable local GStreamer playback");
             Console.WriteLine("  --no-notify          Disable desktop song switch notifications");
             Console.WriteLine("  --check-audio        Check native audio decoding without playing sound");
+            Console.WriteLine("  --check-media-session Check macOS Now Playing and remote-command integration");
             return;
         }
 
@@ -40,6 +41,13 @@ public static partial class Program
         if (args.Contains("--check-audio"))
         {
             Environment.ExitCode = GStreamerDiagnostics.RunAsync().GetAwaiter().GetResult();
+            return;
+        }
+
+        if (args.Contains("--check-media-session"))
+        {
+            QmTui.Utils.AppLogger.Init(args.Contains("--debug") || args.Contains("-d"));
+            Environment.ExitCode = MacMediaSessionDiagnostics.Run();
             return;
         }
 
@@ -61,6 +69,10 @@ public static partial class Program
                        Environment.GetEnvironmentVariable("QQMUSIC_DEBUG") == "1";
         QmTui.Utils.AppLogger.Init(isDebug);
         QmTui.Utils.AppLogger.Info("Program", $"Starting qmtui. DebugMode: {isDebug}");
+
+        // MediaPlayer delivers remote commands through Cocoa's main run loop.
+        // Establish AppKit on the actual process main thread before TUI startup.
+        if (OperatingSystem.IsMacOS()) MacMainLoop.Initialize();
 
         // 加载用户全局偏好配置，并处理命令行参数覆盖
         QmTui.Models.UserConfig.Load();
@@ -182,6 +194,17 @@ public static partial class Program
             using (player)
             {
                 Application.Init();
+                object? macMainLoopTimer = null;
+                int macMainLoopTicks = 0;
+                if (MacMainLoop.IsInitialized)
+                {
+                    macMainLoopTimer = Application.AddTimeout(TimeSpan.FromMilliseconds(25), () =>
+                    {
+                        MacMainLoop.Pump();
+                        macMainLoopTicks++;
+                        return true;
+                    });
+                }
                 if (Application.Driver != null)
                 {
                     Application.Driver.Clipboard = new QmTui.Services.LinuxSystemClipboard();
@@ -224,6 +247,13 @@ public static partial class Program
                         mainWindow.Dispose();
                     }
                     catch { }
+
+                    if (macMainLoopTimer != null)
+                    {
+                        QmTui.Utils.AppLogger.Info("MacMainLoop", $"Cocoa main loop serviced {macMainLoopTicks} active TUI ticks.");
+                        Application.RemoveTimeout(macMainLoopTimer);
+                        MacMainLoop.Pump();
+                    }
 
                     try
                     {

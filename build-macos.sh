@@ -5,14 +5,14 @@
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION="${1:-0.4.5}"
+VERSION="${1:-0.4.6}"
 OUTPUT_DIR="${2:-$REPO_DIR/bin/macos-dist}"
 HELPER_DIR="$REPO_DIR/scripts/macos"
 
 fail() { echo "Error: $*" >&2; exit 1; }
 
 [ "$#" -le 2 ] || fail "Usage: $0 VERSION [output-directory]"
-[[ "$VERSION" =~ ^[0-9]+(\.[0-9]+){1,3}$ ]] || fail "VERSION must be a numeric dotted version, for example 0.4.5."
+[[ "$VERSION" =~ ^[0-9]+(\.[0-9]+){1,3}$ ]] || fail "VERSION must be a numeric dotted version, for example 0.4.6."
 [ "$(uname -s)" = "Darwin" ] || fail "Build on macOS: Native AOT cannot cross-compile macOS from Linux."
 [ "$(uname -m)" = "arm64" ] || fail "Use a native Apple Silicon shell, not an Intel/Rosetta shell."
 MACOS_MAJOR="$(sw_vers -productVersion | cut -d. -f1)"

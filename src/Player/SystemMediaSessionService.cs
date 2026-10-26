@@ -119,6 +119,16 @@ public sealed class SystemMediaSessionService : IDisposable
     }
 
     /// <summary>
+    /// 同步显式停止状态，并保留当前曲目供系统媒体按钮再次播放。
+    /// </summary>
+    public void UpdateStopped()
+    {
+        _linux?.UpdatePlaybackStatus(false);
+        _windows?.UpdatePlaybackStatus(false);
+        _mac?.UpdateStopped();
+    }
+
+    /// <summary>
     /// 同步当前曲目元数据与本地封面路径至系统媒体中心。
     /// </summary>
     /// <param name="song">当前播放的歌曲实体。</param>
@@ -154,9 +164,10 @@ public sealed class SystemMediaSessionService : IDisposable
     /// <param name="durationSeconds">曲目总时长秒数。</param>
     public void UpdatePosition(double seconds, double durationSeconds = 0)
     {
+        double duration = durationSeconds > 0 ? durationSeconds : CurrentSong?.Duration ?? 0;
         _linux?.UpdatePosition(seconds);
-        _windows?.UpdatePosition(seconds, durationSeconds > 0 ? durationSeconds : CurrentSong?.Duration ?? 0);
-        _mac?.UpdatePosition(seconds);
+        _windows?.UpdatePosition(seconds, duration);
+        _mac?.UpdatePosition(seconds, durationSeconds: duration);
     }
 
     /// <summary>
@@ -167,7 +178,7 @@ public sealed class SystemMediaSessionService : IDisposable
     {
         _linux?.EmitSeeked(seconds);
         _windows?.UpdatePosition(seconds, CurrentSong?.Duration ?? 0);
-        _mac?.UpdatePosition(seconds, force: true);
+        _mac?.UpdatePosition(seconds, force: true, durationSeconds: CurrentSong?.Duration ?? 0);
     }
 
     public void Dispose()

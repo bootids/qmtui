@@ -164,9 +164,17 @@ def main():
             raise RuntimeError("Login UI and interactive exit confirmation were not both rendered")
         if "GStreamer playbin pipeline created" not in new_log:
             raise RuntimeError("Native GStreamer playback was not initialized")
+        if "Cocoa accessory application initialized on the native main thread." not in new_log:
+            raise RuntimeError("The production TUI did not initialize Cocoa on the native main thread")
+        if "macOS Now Playing media session started" not in new_log:
+            raise RuntimeError("The production TUI did not start its macOS media session")
+        if not re.search(r"Cocoa main loop serviced [1-9][0-9]* active TUI ticks\.", new_log):
+            raise RuntimeError("The native event pump did not run during the active TUI session")
+        if re.search(r"\[ERROR\] \[(?:MacMainLoop|MacMediaSession|MediaSession)\]", new_log):
+            raise RuntimeError("The production TUI logged a native media-session error")
         if "qmtui Session ended." not in new_log:
             raise RuntimeError("The application did not log a clean shutdown")
-        print("TUI smoke passed: native playback initialized, login rendered, alive >=5s, Q/Enter exit 0.")
+        print("TUI smoke passed: native audio and macOS media session initialized, login rendered, alive >=5s, Q/Enter exit 0.")
     except BaseException as exc:
         error = exc
     finally:

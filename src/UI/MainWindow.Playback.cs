@@ -519,10 +519,15 @@ public sealed partial class MainWindow
             UserSession.Current.LastPlayedSong = song;
             UserSession.Current.LastPlaybackPositionSeconds = startPosition;
             UserSession.Current.Save();
-            _mprisService.UpdateSong(song);
-            _mprisService.UpdatePlaybackStatus(true);
-            _mprisService.UpdateVolume(_player.Volume);
-            _mprisService.UpdatePlaybackMode(_currentPlaybackMode);
+            Application.Invoke(() =>
+            {
+                if (IsStale()) return;
+                _mprisService.UpdateSong(song, _currentCoverFilePath);
+                _mprisService.UpdatePosition(startPosition, song.Duration);
+                _mprisService.UpdatePlaybackStatus(_isTuiAudioDisabled ? _isWebPlaying : _player.IsPlaying);
+                _mprisService.UpdateVolume(_player.Volume);
+                _mprisService.UpdatePlaybackMode(_currentPlaybackMode);
+            });
 
             // 调度一次防抖内存修剪，稳定播放 2.5s 后静默释放 GStreamer 与上曲解码滞留的堆内存
             MemoryManager.ScheduleTrim();
@@ -537,10 +542,11 @@ public sealed partial class MainWindow
                     cover = await TerminalImageHelper.EnsureSongCoverAsync(song, ct).ConfigureAwait(false);
                     if (!string.IsNullOrEmpty(cover) && !IsStale())
                     {
-                        _currentCoverFilePath = cover;
-                        _mprisService.UpdateCover(cover);
                         Application.Invoke(() =>
                         {
+                            if (IsStale()) return;
+                            _currentCoverFilePath = cover;
+                            _mprisService.UpdateCover(cover);
                             _nowPlayingView.UpdateCover(cover);
                             _miniCoverView.UpdateCover(cover);
                             BroadcastConnectPlayerState();
@@ -652,6 +658,7 @@ public sealed partial class MainWindow
             _controlBar.UpdateQuality(AudioQualityHelper.GetBadge(_actualQualityTier));
             _controlBar.UpdateVolume(_player.Volume, _player.Volume == 0);
             _controlBar.UpdatePlayingState(false);
+            _mprisService.UpdateSong(null);
             _mprisService.UpdatePlaybackStatus(false);
             return;
         }
@@ -666,6 +673,10 @@ public sealed partial class MainWindow
         }
         _wasPlayingForStreamReport = isPlaying;
         _controlBar.UpdatePlayingState(isPlaying);
+        // Capture the exact position before publishing pause/play. Otherwise
+        // macOS can freeze at a value from its throttled progress update.
+        _mprisService.UpdatePosition(_isTuiAudioDisabled ? _webVirtualPosition : _player.CurrentPositionSeconds,
+            _player.TotalDurationSeconds > 0 ? _player.TotalDurationSeconds : _activeSong?.Duration ?? 0);
         _mprisService.UpdatePlaybackStatus(isPlaying);
         if (_standaloneWebServer != null && _standaloneWebServer.IsRunning)
         {
@@ -723,7 +734,7 @@ public sealed partial class MainWindow
             {
                 _standaloneWebServer.TotalDurationSeconds = _activeSong.Duration;
             }
-            _mprisService.UpdateSong(_activeSong);
+            _mprisService.UpdateSong(_activeSong, _currentCoverFilePath);
         }
 
         // 累计真实物理播放时长：仅在播放状态、进度向前自然推移（排除拖拽快进/跳跃）时累加

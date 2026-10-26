@@ -538,10 +538,11 @@ public sealed partial class MainWindow
                         var cov = await TerminalImageHelper.EnsureAlbumCoverAsync(bestMatch.AlbumMid).ConfigureAwait(false);
                         if (!string.IsNullOrEmpty(cov) && _activeSong != null && GetSongIdentityKey(_activeSong) == songKey)
                         {
-                            _currentCoverFilePath = cov;
-                            _mprisService.UpdateCover(cov);
                             Application.Invoke(() =>
                             {
+                                if (_activeSong == null || GetSongIdentityKey(_activeSong) != songKey) return;
+                                _currentCoverFilePath = cov;
+                                _mprisService.UpdateCover(cov);
                                 _nowPlayingView.UpdateCover(cov);
                                 _miniCoverView.UpdateCover(cov);
                                 BroadcastConnectPlayerState();

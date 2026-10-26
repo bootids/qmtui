@@ -815,18 +815,7 @@ public sealed partial class MainWindow
         {
             Application.Invoke(async () =>
             {
-                if (!_player.IsPlaying)
-                {
-                    if (_activeSong != null && _player.TotalDurationSeconds <= 0)
-                    {
-                        await PlaySongAsync(_activeSong, UserSession.Current.LastPlaybackPositionSeconds);
-                    }
-                    else
-                    {
-                        await _player.TogglePauseAsync();
-                        UpdatePlayerStatus();
-                    }
-                }
+                await SetPlaybackStateAsync(shouldPlay: true);
             });
             return Task.CompletedTask;
         };
@@ -835,11 +824,7 @@ public sealed partial class MainWindow
         {
             Application.Invoke(async () =>
             {
-                if (_player.IsPlaying)
-                {
-                    await _player.TogglePauseAsync();
-                    UpdatePlayerStatus();
-                }
+                await SetPlaybackStateAsync(shouldPlay: false);
             });
             return Task.CompletedTask;
         };
@@ -848,8 +833,7 @@ public sealed partial class MainWindow
         {
             Application.Invoke(async () =>
             {
-                await _player.StopAsync();
-                UpdatePlayerStatus();
+                await StopPlaybackAsync();
             });
             return Task.CompletedTask;
         };
@@ -886,9 +870,8 @@ public sealed partial class MainWindow
         {
             Application.Invoke(async () =>
             {
-                var target = Math.Clamp(_player.CurrentPositionSeconds + offsetSec, 0, _player.TotalDurationSeconds > 0 ? _player.TotalDurationSeconds : 3600);
-                await _player.SeekAsync(target);
-                _mprisService.EmitSeeked(target);
+                var position = _isTuiAudioDisabled ? _webVirtualPosition : _player.CurrentPositionSeconds;
+                await SeekPlaybackPositionAsync(position + offsetSec);
             });
             return Task.CompletedTask;
         };
@@ -897,9 +880,7 @@ public sealed partial class MainWindow
         {
             Application.Invoke(async () =>
             {
-                var target = Math.Clamp(targetSec, 0, _player.TotalDurationSeconds > 0 ? _player.TotalDurationSeconds : 3600);
-                await _player.SeekAsync(target);
-                _mprisService.EmitSeeked(target);
+                await SeekPlaybackPositionAsync(targetSec);
             });
             return Task.CompletedTask;
         };
@@ -973,17 +954,44 @@ public sealed partial class MainWindow
             });
         };
 
-        Task.Run(async () =>
+        async Task StartMediaSessionAsync()
         {
-            await _mprisService.StartAsync();
-            _mprisService.UpdatePlaybackMode(_currentPlaybackMode);
-            _mprisService.UpdateVolume(_player.Volume);
-            if (_activeSong != null)
+            try
             {
-                _mprisService.UpdateSong(_activeSong);
-                _mprisService.UpdatePlaybackStatus(_player.IsPlaying);
+                await _mprisService.StartAsync();
+                // Replay after construction/restoration on the UI thread. The
+                // service may have started while a song or its cover was loading.
+                Application.Invoke(() =>
+                {
+                    _mprisService.UpdatePlaybackMode(_currentPlaybackMode);
+                    _mprisService.UpdateVolume(_player.Volume);
+                    _mprisService.UpdateSong(_activeSong, _currentCoverFilePath);
+                    double position = _isTuiAudioDisabled ? _webVirtualPosition
+                        : _player.TotalDurationSeconds > 0 ? _player.CurrentPositionSeconds
+                        : UserSession.Current.LastPlaybackPositionSeconds;
+                    double duration = _player.TotalDurationSeconds > 0
+                        ? _player.TotalDurationSeconds : _activeSong?.Duration ?? 0;
+                    _mprisService.UpdatePosition(position, duration);
+                    _mprisService.UpdatePlaybackStatus(_activeSong != null &&
+                        (_isTuiAudioDisabled ? _isWebPlaying : _player.IsPlaying));
+                });
             }
-        });
+            catch (Exception ex)
+            {
+                AppLogger.Error("MediaSession", "Failed to start system media session", ex);
+            }
+        }
+
+        // AppKit/MediaPlayer must be initialized on the actual macOS main
+        // thread, whose native run loop is pumped alongside Terminal.Gui.
+        if (OperatingSystem.IsMacOS())
+        {
+            _ = StartMediaSessionAsync();
+        }
+        else
+        {
+            _ = Task.Run(StartMediaSessionAsync);
+        }
     }
 
 
