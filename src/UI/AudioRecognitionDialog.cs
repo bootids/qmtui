@@ -61,8 +61,11 @@ public sealed class AudioRecognitionDialog : Dialog
         _currentSource = s_currentSource;
 
         // 预热网络连接池与唤醒预录
-        AudioRecognitionService.PreWarm();
-        AudioPreRollManager.WakeUp();
+        if (AudioRecordingService.IsSupported)
+        {
+            AudioRecognitionService.PreWarm();
+            AudioPreRollManager.WakeUp();
+        }
 
         Title = "听歌识曲";
         int dlgW = 62;
@@ -266,7 +269,7 @@ public sealed class AudioRecognitionDialog : Dialog
 
     private void ToggleAudioSource()
     {
-        if (_isDismissed) return;
+        if (_isDismissed || !AudioRecordingService.IsSupported) return;
         var now = Environment.TickCount64;
         if (now - _lastToggleTick < 500)
         {
@@ -287,7 +290,7 @@ public sealed class AudioRecognitionDialog : Dialog
 
     private void TogglePreRoll()
     {
-        if (_isDismissed) return;
+        if (_isDismissed || !AudioRecordingService.IsSupported) return;
         var now = Environment.TickCount64;
         if (now - _lastPreRollToggleTick < 500)
         {
@@ -394,6 +397,16 @@ public sealed class AudioRecognitionDialog : Dialog
         SetNeedsDraw();
 
         AppLogger.Force("AudioRecognitionDialog", $"Starting recognition process. FixedSource: {_currentSource}");
+
+        if (!AudioRecordingService.IsSupported)
+        {
+            ShowDeviceUnavailable("实时录音识曲目前仅支持 Linux", "文件识曲: qmtui --recognize <音频文件>");
+            _actionBtn.Enabled = false;
+            _sourceBtn.Enabled = false;
+            _preRollBtn.Enabled = false;
+            _cancelBtn.SetFocus();
+            return;
+        }
 
         // 检测系统内录输出可用性 (避免在无任何声卡输出时静音等待)
         if (_currentSource == AudioRecordSource.SystemInternal && !AudioDeviceHelper.HasInternalRecordDevice())

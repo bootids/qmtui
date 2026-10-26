@@ -19,7 +19,7 @@ public static partial class Program
 
         if (args.Contains("--help") || args.Contains("-h"))
         {
-            Console.WriteLine("qmtui - Linux Terminal QQ Music Player");
+            Console.WriteLine("qmtui - Linux / macOS Terminal QQ Music Player");
             Console.WriteLine("Usage: qmtui [options]");
             Console.WriteLine();
             Console.WriteLine("Options:");
@@ -31,6 +31,15 @@ public static partial class Program
             Console.WriteLine("  -p, --web-port <p>   Specify Web player port (default: 9999)");
             Console.WriteLine("  --no-audio           Disable local GStreamer playback");
             Console.WriteLine("  --no-notify          Disable desktop song switch notifications");
+            Console.WriteLine("  --check-audio        Check native audio decoding without playing sound");
+            return;
+        }
+
+        GStreamerNative.Initialize();
+
+        if (args.Contains("--check-audio"))
+        {
+            Environment.ExitCode = GStreamerDiagnostics.RunAsync().GetAwaiter().GetResult();
             return;
         }
 

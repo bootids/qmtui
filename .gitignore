@@ -5,6 +5,9 @@ TestResults/
 *.pkg.tar.*
 *.deb
 pkg/
+dist/
+*.pkg
+*.dSYM/
 qmtui
 
 # 临时与缓存产物

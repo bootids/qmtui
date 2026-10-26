@@ -601,18 +601,7 @@ public sealed partial class MainWindow
 
             void DoOpenBrowser()
             {
-                try
-                {
-                    string openTarget = $"http://127.0.0.1:{_webServerPort}/";
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = "xdg-open",
-                        Arguments = openTarget,
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    });
-                }
-                catch { }
+                BrowserLauncher.TryOpen($"http://127.0.0.1:{_webServerPort}/");
                 Application.RequestStop(dlg);
             }
 

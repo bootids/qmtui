@@ -1,0 +1,141 @@
+name: Build macOS Apple Silicon
+
+on:
+  push:
+    branches: [tui, build/macos-arm64]
+    tags: ['macos-v*']
+  pull_request:
+    branches: [tui]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish a prerelease after the installer passes validation
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: Build and install native ARM64 package
+    runs-on: macos-15
+    timeout-minutes: 35
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Read application version
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(python3 -c 'import json; print(json.load(open("package.json"))["version"])')
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          test "$(uname -m)" = arm64
+
+      - name: Build offline installer and portable archive
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: bash ./build-macos.sh "$VERSION" dist
+
+      - name: Install complete package on the runner
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          sudo installer -pkg "dist/qmtui-${VERSION}-macos-arm64.pkg" -target /
+          /usr/local/bin/qmtui --version
+          /usr/local/bin/qmtui --help
+          test "$(lipo -archs /usr/local/bin/qmtui)" = arm64
+          codesign --verify --strict /usr/local/bin/qmtui
+          test -x /Applications/qmtui.command
+
+      - name: Verify installed Native AOT audio decoding
+        run: /usr/local/bin/qmtui --check-audio
+
+      - name: Verify interactive terminal startup and clean exit
+        run: python3 scripts/macos/smoke-tui.py /usr/local/bin/qmtui
+
+      - name: Run unit tests and native audio integration tests
+        env:
+          QMTUI_GSTREAMER_TEST: '1'
+        run: dotnet test tests/QmTui.Tests/QmTui.Tests.csproj -c Release --logger 'trx;LogFileName=macos-arm64.trx' --results-directory TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64-test-results
+          path: TestResults/*.trx
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Upload verified installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: qmtui-macos-arm64
+          path: |
+            dist/*.pkg
+            dist/*.tar.gz
+            dist/INSTALL-macOS.txt
+            dist/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 90
+
+  release:
+    name: Publish verified macOS download
+    needs: package
+    if: >-
+      github.event_name != 'pull_request' &&
+      (github.ref == 'refs/heads/build/macos-arm64' ||
+       startsWith(github.ref, 'refs/tags/macos-v') ||
+       (github.event_name == 'workflow_dispatch' && inputs.publish))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: qmtui-macos-arm64
+          path: dist
+
+      - name: Publish installer and checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.package.outputs.version }}
+        shell: bash
+        run: |
+          TAG="macos-v${VERSION}-${GITHUB_RUN_NUMBER}"
+          if [[ "$GITHUB_REF" == refs/tags/macos-v* ]]; then
+            TAG="$GITHUB_REF_NAME"
+          fi
+          cat > release-notes.md <<'NOTES'
+          ## Apple Silicon / M5 Mac 安装包
+
+          下载 `.pkg`，双击安装。安装完成后在终端运行 `qmtui`，或打开“应用程序”中的 `qmtui.command`。
+
+          - 原生 ARM64，适用于 macOS 15 及以上的 Apple Silicon Mac；无需 Rosetta、.NET 或 Homebrew。
+          - `.pkg` 包含官方 GStreamer 1.28.8 音频运行库，并安装到 `/Library/Frameworks/GStreamer.framework`。
+          - `.tar.gz` 仅包含 qmtui，本地播放另需安装 GStreamer。
+          - 可运行 `qmtui --check-audio` 检查音频解码。此检查使用静音输出，不验证物理扬声器。
+          - 当前未使用 Apple Developer ID 签名或公证；若系统阻止安装，请在“系统设置 → 隐私与安全性”中允许本次打开。
+          - macOS 暂不支持 Linux PulseAudio 专用的实时录音识曲和后台预录；文件识曲可用。
+
+          构建流程已在 macOS ARM64 runner 上验证完整安装、测试套件、发布后二进制音频解码，以及终端启动与退出。在线音乐播放仍取决于用户自己的登录状态和服务端权限。
+          NOTES
+          echo >> release-notes.md
+          echo "Source commit: $GITHUB_SHA" >> release-notes.md
+          echo "Build: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> release-notes.md
+          gh release create "$TAG" dist/*.pkg dist/*.tar.gz dist/INSTALL-macOS.txt dist/SHA256SUMS \
+            --target "$GITHUB_SHA" --title "qmtui ${VERSION} · macOS Apple Silicon" \
+            --prerelease --latest=false --notes-file release-notes.md

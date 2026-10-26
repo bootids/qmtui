@@ -1,0 +1,27 @@
+GStreamer runtime bundled with the macOS installer
+=================================================
+
+Version: 1.28.8 (official universal macOS runtime)
+Upstream: https://gstreamer.freedesktop.org/
+Original package:
+https://gstreamer.freedesktop.org/data/pkg/osx/1.28.8/gstreamer-1.0-1.28.8-universal.pkg
+SHA-256:
+d371ab04a7632713626836c2fc234e863cc98484c74c473eba99b0fbd9b3a3fe
+
+The original component payloads, package identifiers, installation paths,
+dependency choices, and upstream licensing resource are retained. Components
+are not statically linked into qmtui or relocated. The original installer
+license is also installed as GSTREAMER-LICENSE.txt beside this file.
+
+GStreamer, its plugins, and bundled dependencies retain their individual
+licenses. Refer to the upstream licensing resource and the license files
+included by the official runtime. The qmtui MIT license does not replace
+these third-party licenses.
+
+Upstream source release and build definitions:
+https://gstreamer.freedesktop.org/src/gstreamer/gstreamer-1.28.8.tar.xz
+https://gitlab.freedesktop.org/gstreamer/gstreamer/-/tree/1.28.8
+https://gitlab.freedesktop.org/gstreamer/cerbero/-/tree/1.28.8
+
+The cerbero release contains the build recipes, dependency source locations,
+and patches used by the upstream binary distribution.

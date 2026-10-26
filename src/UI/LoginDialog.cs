@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Diagnostics;
 using Terminal.Gui.App;
 using Terminal.Gui.Drawing;
 using Terminal.Gui.Input;
@@ -506,32 +505,7 @@ public sealed class LoginDialog : Dialog
 
     private static void TryOpenBrowser(string url)
     {
-        if (string.IsNullOrWhiteSpace(url)) return;
-        try
-        {
-            using var proc = Process.Start(new ProcessStartInfo
-            {
-                FileName = "xdg-open",
-                Arguments = $"\"{url}\"",
-                UseShellExecute = false,
-                CreateNoWindow = true
-            });
-        }
-        catch
-        {
-            try
-            {
-                using var proc = Process.Start(new ProcessStartInfo
-                {
-                    FileName = url,
-                    UseShellExecute = true
-                });
-            }
-            catch
-            {
-                // Ignore headless or browser missing error
-            }
-        }
+        BrowserLauncher.TryOpen(url);
     }
 
     public void CloseSelf()
