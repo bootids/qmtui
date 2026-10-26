@@ -23,7 +23,7 @@ concurrency:
 jobs:
   package:
     name: Build and install native ARM64 package
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 35
     outputs:
       version: ${{ steps.version.outputs.version }}
