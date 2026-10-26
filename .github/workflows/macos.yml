@@ -58,6 +58,8 @@ jobs:
           test "$(lipo -archs /usr/local/bin/qmtui)" = arm64
           codesign --verify --strict /usr/local/bin/qmtui
           test -x /Applications/qmtui.command
+          test -r /Library/Frameworks/GStreamer.framework/Versions/1.0/lib/libgstreamer-1.0.0.dylib
+          test -x /Library/Frameworks/GStreamer.framework
           GST_BIN=/Library/Frameworks/GStreamer.framework/Versions/1.0/bin
           "$GST_BIN/gst-inspect-1.0" --version
           for plugin in playbin fakesink osxaudiosink wavparse; do
@@ -89,6 +91,7 @@ jobs:
         shell: bash
         run: |
           GST_ROOT=/Library/Frameworks/GStreamer.framework/Versions/1.0
+          sudo ls -lde /Library/Frameworks/GStreamer.framework "$GST_ROOT" "$GST_ROOT/lib" "$GST_ROOT/bin" || true
           for library in libgstreamer-1.0.0.dylib libgobject-2.0.0.dylib libglib-2.0.0.dylib; do
             if [ -f "$GST_ROOT/lib/$library" ]; then
               file "$GST_ROOT/lib/$library"

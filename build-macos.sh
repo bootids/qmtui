@@ -38,6 +38,10 @@ COMPONENT_COUNT=0
 for component in "$STAGE_DIR/runtime/"*.pkg; do
     [ -d "$component" ] || fail "Expected an expanded runtime component directory: $component"
     [ -f "$component/PackageInfo" ] || fail "Runtime component has no PackageInfo: $component"
+    if [ "$(basename "$component")" = "osx-framework-1.28.8-universal.pkg" ]; then
+        echo "==> Correcting upstream framework root permissions (0700 -> 0755)..."
+        "$HELPER_DIR/normalize-framework-component.sh" "$component" "$STAGE_DIR/framework-fix"
+    fi
     pkgutil --flatten "$component" "$STAGE_DIR/packages/$(basename "$component")"
     COMPONENT_COUNT=$((COMPONENT_COUNT + 1))
 done
@@ -71,7 +75,7 @@ pkgbuild --root "$PAYLOAD" --identifier io.github.bootids.qmtui \
     --version "$VERSION" --install-location / --ownership recommended \
     "$STAGE_DIR/packages/qmtui-component.pkg"
 
-echo "==> Composing the offline installer (${COMPONENT_COUNT} original runtime components)..."
+echo "==> Composing the offline installer (${COMPONENT_COUNT} upstream runtime components)..."
 ditto "$STAGE_DIR/runtime/Resources" "$STAGE_DIR/resources"
 cat > "$STAGE_DIR/resources/qmtui-welcome.txt" <<EOF
 qmtui ${VERSION} — Apple Silicon (arm64)

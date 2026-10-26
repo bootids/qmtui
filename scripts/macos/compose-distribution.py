@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Add qmtui to the unmodified GStreamer runtime component packages.
+"""Add qmtui to the GStreamer runtime component packages.
 
 The upstream Distribution retains its component IDs, dependencies, choices and
 license resources. No installation script downloads or installs another package.
+The framework wrapper's root mode is normalized separately before composition.
 """
 
 import argparse
@@ -69,8 +70,8 @@ def compose(source: Path, packages: Path, output: Path, version: str) -> None:
         title = ET.SubElement(root, "title")
     title.text = f"qmtui {version} for Apple Silicon"
 
-    # .NET 10's currently supported macOS floor. This also matches the native
-    # macos-15 CI build host; M5 Macs run a newer macOS version.
+    # .NET 10's currently supported macOS floor. CI uses a newer native Apple
+    # Silicon host; M5 Macs also run a newer macOS version.
     volume_check = root.find("volume-check")
     if volume_check is None:
         volume_check = ET.SubElement(root, "volume-check")

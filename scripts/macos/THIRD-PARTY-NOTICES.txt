@@ -8,10 +8,19 @@ https://gstreamer.freedesktop.org/data/pkg/osx/1.28.8/gstreamer-1.0-1.28.8-unive
 SHA-256:
 d371ab04a7632713626836c2fc234e863cc98484c74c473eba99b0fbd9b3a3fe
 
-The original component payloads, package identifiers, installation paths,
-dependency choices, and upstream licensing resource are retained. Components
-are not statically linked into qmtui or relocated. The original installer
-license is also installed as GSTREAMER-LICENSE.txt beside this file.
+The original package identifiers, installation paths, dependency choices, and
+upstream licensing resource are retained. Components are not statically linked
+into qmtui or relocated. The original installer license is also installed as
+GSTREAMER-LICENSE.txt beside this file.
+
+Packaging correction: the upstream 1.28.8 framework-wrapper component records
+the /Library/Frameworks/GStreamer.framework directory with mode 0700, preventing
+ordinary users from accessing the runtime after a system installation. This
+installer rebuilds that tiny wrapper's Payload and Bill of Materials with only
+the framework root directory changed to mode 0755. All file contents (including
+signed binaries), symlinks, other directory modes, and component metadata are
+preserved and verified during the build. The other 22 component payloads remain
+unchanged. No system directory outside this framework is modified by the fix.
 
 GStreamer, its plugins, and bundled dependencies retain their individual
 licenses. Refer to the upstream licensing resource and the license files
