@@ -2,10 +2,10 @@ name: Build macOS Apple Silicon
 
 on:
   push:
-    branches: [tui, build/macos-arm64]
+    branches: [main, tui, build/macos-arm64]
     tags: ['macos-v*']
   pull_request:
-    branches: [tui]
+    branches: [main, tui]
   workflow_dispatch:
     inputs:
       publish:
