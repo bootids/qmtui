@@ -70,6 +70,7 @@ public sealed class TvConnectServer : IDisposable
     public int ActualPort { get; private set; } = 8765;
     public bool IsRunning => _listener?.IsListening ?? false;
     public int ConnectedCount => _activeClients.Count;
+    internal Task AcceptLoopCompletion { get; private set; } = Task.CompletedTask;
 
     // 事件通知
     public event Action<ConnectDevice>? DeviceConnected;
@@ -137,6 +138,7 @@ public sealed class TvConnectServer : IDisposable
         if (_listener != null && _listener.IsListening) return;
 
         _cts = new CancellationTokenSource();
+        var cancellationToken = _cts.Token;
         int initialCandidate = FindAvailablePort(_port);
 
         for (int candidate = initialCandidate; candidate <= _port + 10; candidate++)
@@ -181,23 +183,30 @@ public sealed class TvConnectServer : IDisposable
             return;
         }
 
-        Task.Run(async () =>
+        // Keep each run tied to its own listener and token. Stop clears the fields,
+        // and a subsequent Start may replace them before this loop has finished.
+        var listener = _listener;
+        AcceptLoopCompletion = Task.Run(async () =>
         {
-            while (!_cts.Token.IsCancellationRequested && _listener.IsListening)
+            while (!cancellationToken.IsCancellationRequested)
             {
                 try
                 {
-                    var ctx = await _listener.GetContextAsync().ConfigureAwait(false);
+                    var ctx = await listener.GetContextAsync().ConfigureAwait(false);
                     if (ctx.Request.IsWebSocketRequest)
                     {
-                        _ = ProcessWebSocketRequestAsync(ctx);
+                        _ = ProcessWebSocketRequestAsync(ctx, cancellationToken);
                     }
                     else
                     {
                         _ = ProcessHttpRequestAsync(ctx);
                     }
                 }
-                catch (HttpListenerException) when (_cts.IsCancellationRequested)
+                catch (HttpListenerException) when (cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch (ObjectDisposedException) when (cancellationToken.IsCancellationRequested)
                 {
                     break;
                 }
@@ -206,21 +215,31 @@ public sealed class TvConnectServer : IDisposable
                     AppLogger.Warn("TvConnectServer", $"Error accepting HTTP context: {ex.Message}");
                 }
             }
-        }, _cts.Token);
+        });
     }
 
-    private async Task ProcessWebSocketRequestAsync(HttpListenerContext ctx)
+    private async Task ProcessWebSocketRequestAsync(HttpListenerContext ctx, CancellationToken cancellationToken)
     {
         WebSocketContext wsCtx;
         try
         {
             wsCtx = await ctx.AcceptWebSocketAsync(subProtocol: null).ConfigureAwait(false);
         }
+        catch (Exception ex) when (cancellationToken.IsCancellationRequested &&
+            ex is HttpListenerException or WebSocketException or ObjectDisposedException or OperationCanceledException)
+        {
+            return;
+        }
         catch (Exception ex)
         {
             AppLogger.Error("TvConnectServer", "Failed to accept WebSocket", ex);
-            ctx.Response.StatusCode = 500;
-            ctx.Response.Close();
+            try
+            {
+                ctx.Response.StatusCode = 500;
+                ctx.Response.Close();
+            }
+            catch (ObjectDisposedException) { }
+            catch (HttpListenerException) { }
             return;
         }
 
@@ -234,13 +253,13 @@ public sealed class TvConnectServer : IDisposable
 
         try
         {
-            while (socket.State == WebSocketState.Open && !_cts!.IsCancellationRequested)
+            while (socket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
             {
                 ms.SetLength(0);
                 WebSocketReceiveResult result;
                 do
                 {
-                    result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), _cts.Token).ConfigureAwait(false);
+                    result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken).ConfigureAwait(false);
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
                         await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing", CancellationToken.None).ConfigureAwait(false);
@@ -255,6 +274,10 @@ public sealed class TvConnectServer : IDisposable
                     await HandleIncomingMessageAsync(socket, text).ConfigureAwait(false);
                 }
             }
+        }
+        catch (Exception ex) when (cancellationToken.IsCancellationRequested &&
+            ex is WebSocketException or ObjectDisposedException or OperationCanceledException)
+        {
         }
         catch (Exception ex)
         {

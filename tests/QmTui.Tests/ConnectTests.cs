@@ -479,6 +479,46 @@ public class ConnectTests
     }
 
     [Fact]
+    public async Task TvConnectServer_StopAndRestart_CompletesEachAcceptLoop()
+    {
+        using var server = new TvConnectServer(new ConnectStorage(), port: 19886);
+        using var httpClient = new System.Net.Http.HttpClient(new System.Net.Http.HttpClientHandler
+        {
+            UseProxy = false
+        }) { Timeout = TimeSpan.FromSeconds(5) };
+
+        server.Start();
+        Assert.True(server.IsRunning);
+        var firstAcceptLoop = server.AcceptLoopCompletion;
+        using (var response = await httpClient.GetAsync($"http://127.0.0.1:{server.ActualPort}/shutdown-test"))
+        {
+            Assert.Equal(System.Net.HttpStatusCode.NotFound, response.StatusCode);
+        }
+        Assert.False(firstAcceptLoop.IsCompleted);
+
+        // Restart immediately, before awaiting the old loop, so its continuation
+        // must still use the cancelled token and listener from the first run.
+        server.Stop();
+        Assert.False(server.IsRunning);
+        server.Start();
+        Assert.True(server.IsRunning);
+        var secondAcceptLoop = server.AcceptLoopCompletion;
+        Assert.NotSame(firstAcceptLoop, secondAcceptLoop);
+        await firstAcceptLoop.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(firstAcceptLoop.IsCompletedSuccessfully);
+
+        using (var response = await httpClient.GetAsync($"http://127.0.0.1:{server.ActualPort}/shutdown-test"))
+        {
+            Assert.Equal(System.Net.HttpStatusCode.NotFound, response.StatusCode);
+        }
+        Assert.False(secondAcceptLoop.IsCompleted);
+        server.Stop();
+        await secondAcceptLoop.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(secondAcceptLoop.IsCompletedSuccessfully);
+        Assert.False(server.IsRunning);
+    }
+
+    [Fact]
     public void Song_IsLocal_IsWebDav_MutualExclusion()
     {
         var localSong = new Song("local_123", "Title", "Artist", "Album", 180)
