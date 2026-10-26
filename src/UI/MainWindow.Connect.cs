@@ -288,7 +288,7 @@ public sealed partial class MainWindow
             });
             _connectServer.SeekRequested += ms => Application.Invoke(async () =>
             {
-                await _player.SeekAsync(ms / 1000.0).ConfigureAwait(false);
+                await SeekPlaybackPositionAsync(ms / 1000.0);
                 BroadcastConnectPlayerState();
             });
             _connectServer.SetVolumeRequested += vol => Application.Invoke(() => AdjustVolumeDirect((int)Math.Round(vol * 100)));

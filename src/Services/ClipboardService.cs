@@ -5,12 +5,12 @@ using QmTui.Utils;
 namespace QmTui.Services;
 
 /// <summary>
-/// 跨桌面环境（Wayland / X11）与虚拟终端的系统剪贴板服务
+/// 跨桌面环境（macOS / Wayland / X11）与虚拟终端的系统剪贴板服务
 /// </summary>
 public static class ClipboardService
 {
     /// <summary>
-    /// 将指定文本复制到系统剪贴板（支持 Wayland wl-copy、X11 xclip/xsel 及终端 OSC 52 转义序列）
+    /// 将指定文本复制到系统剪贴板（支持 macOS pbcopy、Wayland wl-copy、X11 xclip/xsel 及终端 OSC 52 转义序列）
     /// </summary>
     /// <param name="text">写入剪贴板的纯文本内容。</param>
     /// <returns>向系统剪贴板写入文本成功返回 <see langword="true"/>；失败返回 <see langword="false"/>。</returns>
@@ -21,10 +21,10 @@ public static class ClipboardService
             return false;
         }
 
-        bool success = false;
+        bool success = OperatingSystem.IsMacOS() && TryRunWithStdin("/usr/bin/pbcopy", text);
 
         // 1. Wayland 环境优先尝试 wl-copy
-        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY")))
+        if (!success && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY")))
         {
             if (TryRunWithStdin("wl-copy", text))
             {
@@ -59,12 +59,18 @@ public static class ClipboardService
     }
 
     /// <summary>
-    /// 从系统剪贴板读取文本（支持 Wayland wl-paste、X11 xclip/xsel）
+    /// 从系统剪贴板读取文本（支持 macOS pbpaste、Wayland wl-paste、X11 xclip/xsel）
     /// </summary>
     /// <returns>从系统剪贴板读取的纯文本内容；若读取失败或无文本返回空字符串。</returns>
     /// <param name="primary">是否优先读取鼠标选区 (Primary Selection，通常用于鼠标中键粘贴)</param>
     public static string GetText(bool primary = false)
     {
+        // macOS 没有独立的 Primary Selection，统一读取系统剪贴板。
+        if (OperatingSystem.IsMacOS())
+        {
+            return TryReadStdout("/usr/bin/pbpaste") ?? "";
+        }
+
         // 1. Wayland 环境优先尝试 wl-paste
         if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY")))
         {
@@ -164,7 +170,7 @@ public static class ClipboardService
 }
 
 /// <summary>
-/// 适配 Terminal.Gui 的跨桌面环境 Linux 系统剪贴板实现
+/// 适配 Terminal.Gui 的跨桌面环境系统剪贴板实现（保留原类名以兼容现有调用）
 /// </summary>
 public sealed class LinuxSystemClipboard : Terminal.Gui.App.IClipboard
 {

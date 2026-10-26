@@ -114,6 +114,12 @@ public sealed class AudioRecordingSession : IDisposable
     public AudioRecordingSession(AudioRecordSource source, byte[]? initialPreRollBytes = null)
     {
         _source = source;
+        if (!AudioRecordingService.IsSupported)
+        {
+            AppLogger.Warn("AudioRecording", "Live audio capture currently requires Linux with PulseAudio/PipeWire.");
+            return;
+        }
+
         if (initialPreRollBytes != null && initialPreRollBytes.Length > 0)
         {
             _pcmStream.Write(initialPreRollBytes, 0, initialPreRollBytes.Length);
@@ -383,6 +389,8 @@ public sealed class AudioRecordingSession : IDisposable
 /// </summary>
 public static class AudioRecordingService
 {
+    public static bool IsSupported => OperatingSystem.IsLinux();
+
     /// <summary>
     /// 启动流式录音会话
     /// </summary>

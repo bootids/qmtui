@@ -1,0 +1,67 @@
+qmtui for Apple Silicon (M1 / M2 / M3 / M4 / M5)
+=============================================
+
+要求：macOS 15 或更新版本、Apple Silicon（arm64）。
+
+推荐安装方式
+------------
+打开 qmtui-<版本>-macos-arm64.pkg，按照 macOS 安装器的提示完成安装。
+这个安装包包含原生 arm64 qmtui 和官方 GStreamer 1.28.8 音频运行时，
+安装过程不需要联网，也不需要另外安装 .NET、Homebrew 或 Rosetta。
+播放在线歌曲、登录、搜索等在线功能仍然需要网络连接。
+
+安装后可以在终端输入：
+
+    qmtui
+
+也可以在“应用程序”中双击 qmtui.command，用 Terminal 打开终端界面。
+升级安装后，请先退出旧的 qmtui 进程，再重新启动。
+查看版本和帮助：
+
+    qmtui --version
+    qmtui --help
+    qmtui --check-audio
+    qmtui --check-media-session
+
+--check-audio 用临时 WAV 验证音频库加载、解码、进度及跳转，采用静音输出，
+不验证物理扬声器。实时录音识曲与后台预录目前仅支持 Linux；macOS 可用
+qmtui --recognize <音频文件> 进行文件识曲。
+
+macOS 系统媒体集成通过公开的 MediaPlayer API 发布歌曲、歌手、专辑、进度
+和播放状态，并接收播放、暂停、切歌、跳转命令。0.4.6 补充了处理这些系统
+回调所需的主线程 Cocoa 事件循环，仍可直接从终端启动。
+
+--check-media-session 会短暂发布一首虚构的 qmtui 测试歌曲，验证原生媒体
+信息读回、控制回调和主线程事件循环，然后清除这次测试的媒体信息。
+它不播放音频、不访问网络或账号凭据，也不操作控制中心；检查通过不代表
+已自动验证控制中心的实际显示或外部设备的媒体按键。
+
+本发行版未经过 Apple Developer ID 签名和公证。如果 macOS 阻止打开
+安装包，请先核对下载来源和 SHA256SUMS，然后在“系统设置 → 隐私与安全性”
+中找到这次安装的阻止提示，点击“仍要打开”。不需要关闭系统安全保护。
+
+安装内容
+--------
+/usr/local/bin/qmtui                      原生可执行文件
+/usr/local/bin/qqmusic-tui                兼容命令别名
+/Applications/qmtui.command              Terminal 启动入口
+/usr/local/share/qmtui/                  使用说明、许可证和依赖来源
+/Library/Frameworks/GStreamer.framework/ 官方共享音频运行时
+
+GStreamer 使用官方安装包原有的组件标识与安装位置；其他应用也可能使用
+这个共享运行时。安装器可自定义上游可选组件，qmtui 必需的音频组件会保留。
+
+终端显示
+--------
+系统 Terminal 可显示基础文字界面；封面图片需要支持 Kitty 图像协议的终端。
+这是一款终端应用，不是独立窗口的图形音乐播放器。
+
+便携压缩包
+----------
+qmtui-<版本>-macos-arm64.tar.gz 只包含 qmtui，不包含 GStreamer。
+已安装完整 .pkg 的机器，或已安装官方 GStreamer macOS 运行时的机器，
+解压后可以在终端执行 ./qmtui。首次安装推荐使用上面的完整 .pkg。
+
+配置文件仍使用 ~/.config/qmtui、~/.cache/qmtui、~/.local/share/qmtui。
+卸载可删除上面列出的 qmtui 可执行文件、别名、启动入口及说明目录。
+保留 GStreamer 共享运行时，除非确认没有其他应用使用它。

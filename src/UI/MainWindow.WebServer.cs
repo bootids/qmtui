@@ -139,11 +139,12 @@ public sealed partial class MainWindow
                 {
                     UpdateProgress(sec);
                     UpdateLyrics(sec);
+                    _mprisService.EmitSeeked(sec);
                 });
             }
             else
             {
-                _ = _player.SeekAsync(sec);
+                Application.Invoke(async () => await SeekPlaybackPositionAsync(sec));
             }
         };
         server.VolumeRequested += vol =>
@@ -321,6 +322,38 @@ public sealed partial class MainWindow
             }
             UpdatePlayerStatus();
         }
+    }
+
+    private async Task SetPlaybackStateAsync(bool shouldPlay)
+    {
+        bool isPlaying = _isTuiAudioDisabled ? _isWebPlaying : _player.IsPlaying;
+        if (isPlaying != shouldPlay)
+        {
+            await TogglePlayOrPauseAsync();
+        }
+    }
+
+    private async Task StopPlaybackAsync()
+    {
+        await _player.StopAsync();
+        _isWebPlaying = false;
+        _webVirtualPosition = 0;
+        StopWebVirtualTicker();
+        if (_standaloneWebServer != null && _standaloneWebServer.IsRunning)
+        {
+            _standaloneWebServer.IsPlaying = false;
+            _standaloneWebServer.CurrentPositionSeconds = 0;
+            _standaloneWebServer.BroadcastState("stop");
+        }
+        UserSession.Current.LastPlaybackPositionSeconds = 0;
+        Application.Invoke(() =>
+        {
+            UpdateProgress(0);
+            UpdateLyrics(0);
+            UpdatePlayerStatus();
+            _mprisService.EmitSeeked(0);
+            _mprisService.UpdateStopped();
+        });
     }
 
     private async Task SetTuiAudioDisabledAsync(bool disabled)

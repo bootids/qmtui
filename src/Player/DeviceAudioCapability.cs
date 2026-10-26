@@ -9,7 +9,7 @@ namespace QmTui.Player;
 /// </summary>
 public static partial class DeviceAudioCapability
 {
-    private const string LibGst = "libgstreamer-1.0.so.0";
+    private const string LibGst = GStreamerNative.GstLibrary;
 
     private const ulong GST_ELEMENT_FACTORY_TYPE_DECODER = 1UL << 0;
     private const ulong GST_ELEMENT_FACTORY_TYPE_MEDIA_AUDIO = 1UL << 50;
@@ -87,6 +87,7 @@ public static partial class DeviceAudioCapability
     /// </summary>
     public static void EnsureInitialized()
     {
+        GStreamerNative.Initialize();
         if (s_isInitialized) return;
         lock (s_lock)
         {

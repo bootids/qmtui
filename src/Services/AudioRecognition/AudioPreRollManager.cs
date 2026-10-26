@@ -103,7 +103,7 @@ public static class AudioPreRollManager
     private static readonly RollingAudioBuffer s_buffer = new(16000 * 2 * 4); // 4 秒缓冲 (128KB)
     private static Thread? s_workerThread;
     private static CancellationTokenSource? s_cts;
-    private static volatile bool s_isEnabled = UserConfig.Current.EnableAudioRecognitionPreRoll;
+    private static volatile bool s_isEnabled = AudioRecordingService.IsSupported && UserConfig.Current.EnableAudioRecognitionPreRoll;
     private static volatile bool s_hasSignal;
     private static volatile bool s_isSleeping;
     private static long s_consecutiveSilenceChunks;
@@ -113,8 +113,8 @@ public static class AudioPreRollManager
         get => s_isEnabled;
         set
         {
-            s_isEnabled = value;
-            if (!value)
+            s_isEnabled = value && AudioRecordingService.IsSupported;
+            if (!s_isEnabled)
             {
                 s_buffer.Clear();
                 s_hasSignal = false;
@@ -162,7 +162,7 @@ public static class AudioPreRollManager
     /// </summary>
     public static void EnsureStarted()
     {
-        if (!s_isEnabled) return;
+        if (!AudioRecordingService.IsSupported || !s_isEnabled) return;
         lock (s_lock)
         {
             if (s_workerThread != null && s_workerThread.IsAlive) return;

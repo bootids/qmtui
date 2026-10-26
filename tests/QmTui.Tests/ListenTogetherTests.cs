@@ -6,6 +6,9 @@ using Xunit;
 
 namespace QmTui.Tests;
 
+// PlaybackQueueService consults the shared room state when accepting local/WebDAV
+// songs, so these tests must not change it while queue tests are running.
+[Collection("PlaybackQueue")]
 public class ListenTogetherTests
 {
     [Fact]
@@ -50,7 +53,6 @@ public class ListenTogetherTests
     {
         var mgr = ListenTogetherManager.Instance;
         mgr.SetRoomForTesting(new ListenTogetherRoomInfo { ShowId = "LUGC_TEST", UsersCount = 2, IsValid = true });
-        Assert.True(mgr.IsInRoom);
 
         bool eventFired = false;
         ListenTogetherRoomInfo? eventRoom = new ListenTogetherRoomInfo();
@@ -64,6 +66,7 @@ public class ListenTogetherTests
         mgr.RoomChanged += handler;
         try
         {
+            Assert.True(mgr.IsInRoom);
             mgr.LeaveRoom();
             Assert.Null(mgr.CurrentRoom);
             Assert.False(mgr.IsInRoom);
@@ -74,6 +77,7 @@ public class ListenTogetherTests
         finally
         {
             mgr.RoomChanged -= handler;
+            mgr.SetRoomForTesting(null);
         }
     }
 
@@ -140,7 +144,7 @@ public class ListenTogetherTests
         }
         finally
         {
-            mgr.LeaveRoom();
+            mgr.SetRoomForTesting(null);
         }
     }
 }

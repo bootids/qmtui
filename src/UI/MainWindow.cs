@@ -238,7 +238,6 @@ public sealed partial class MainWindow : Window
         _player.SetVolume(initialVolume);
 
         _mprisService = new SystemMediaSessionService();
-        SetupMprisService();
         SetupConnectService();
 
         Task.Run(async () =>
@@ -894,11 +893,7 @@ public sealed partial class MainWindow : Window
                 if (lyricIdx >= 0 && lyricIdx < _currentLyrics.Count)
                 {
                     var targetSec = _currentLyrics[lyricIdx].Timestamp.TotalSeconds;
-                    await _player.SeekAsync(targetSec);
-                    Application.Invoke(() =>
-                    {
-                        UpdateProgress(targetSec);
-                    });
+                    await SeekPlaybackPositionAsync(targetSec);
                 }
             }
         };
@@ -1462,6 +1457,9 @@ public sealed partial class MainWindow : Window
         RestorePlaybackState();
         UpdateSidebarLayout();
         UpdateFooterLayout();
+        // Register system callbacks after controls and restored playback state
+        // exist, so a remote command cannot target a half-constructed window.
+        SetupMprisService();
     }
 
     public void UpdateFooterLayout()
@@ -1574,10 +1572,11 @@ public sealed partial class MainWindow : Window
                         var cover = await TerminalImageHelper.EnsureSongCoverAsync(lastSong).ConfigureAwait(false);
                         if (!string.IsNullOrEmpty(cover))
                         {
-                            _currentCoverFilePath = cover;
-                            _mprisService.UpdateCover(cover);
                             Application.Invoke(() =>
                             {
+                                if (_activeSong == null || GetSongIdentityKey(_activeSong) != GetSongIdentityKey(lastSong)) return;
+                                _currentCoverFilePath = cover;
+                                _mprisService.UpdateCover(cover);
                                 _nowPlayingView.UpdateCover(cover);
                                 _miniCoverView.UpdateCover(cover);
                             });
@@ -1683,6 +1682,8 @@ public sealed partial class MainWindow : Window
 
     private async Task SeekPlaybackPositionAsync(double targetSec)
     {
+        if (!double.IsFinite(targetSec)) return;
+        targetSec = Math.Max(0, targetSec);
         double totalSec = _player.TotalDurationSeconds > 0
             ? _player.TotalDurationSeconds
             : (_activeSong?.Duration > 0 ? _activeSong.Duration : (_standaloneWebServer?.TotalDurationSeconds ?? 0));
@@ -1709,6 +1710,7 @@ public sealed partial class MainWindow : Window
             {
                 UpdateProgress(targetSec);
                 UpdateLyrics(targetSec);
+                _mprisService.EmitSeeked(targetSec);
             });
         }
         else
@@ -1723,6 +1725,7 @@ public sealed partial class MainWindow : Window
             {
                 UpdateProgress(targetSec);
                 UpdateLyrics(targetSec);
+                _mprisService.EmitSeeked(targetSec);
             });
         }
     }
