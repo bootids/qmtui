@@ -4,6 +4,8 @@
 
 本 fork 的分支职责和定期上游同步方式见 [Fork 维护说明](docs/maintenance.md)。
 
+在 Herdr 中使用快捷键呼出播放器并保持后台播放，见 [Herdr 插件](plugins/herdr/README.md)。
+
 ## macOS / M5 Mac 安装
 
 支持 **macOS 15 及以上、Apple Silicon（M1 / M2 / M3 / M4 / M5）**。
