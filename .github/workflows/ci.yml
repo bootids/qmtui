@@ -24,4 +24,6 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      - name: Verify Herdr plugin behavior
+        run: python3 -m unittest discover -s plugins/herdr -p 'test_*.py' -v
       - run: dotnet test tests/QmTui.Tests/QmTui.Tests.csproj -c Release
