@@ -1,0 +1,62 @@
+name: Sync upstream
+
+on:
+  schedule:
+    # Daily at 07:20 Asia/Shanghai.
+    - cron: '20 23 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.repository == 'bootids/qmtui'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Fast-forward the upstream mirror
+        run: |
+          git remote add upstream https://github.com/Viemean/qmtui.git
+          git fetch upstream tui --no-tags
+          # A normal push refuses to overwrite any divergent commits on tui.
+          git push origin refs/remotes/upstream/tui:refs/heads/tui
+
+      - name: Open or reuse the upstream pull request
+        shell: bash
+        run: |
+          if git merge-base --is-ancestor upstream/tui origin/main; then
+            echo "main already contains upstream/tui." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          EXISTING_PR=$(gh pr list --base main --head tui --state open --json url --jq '.[0].url // empty')
+          if [ -n "$EXISTING_PR" ]; then
+            echo "Upstream sync PR: $EXISTING_PR" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          cat > "$RUNNER_TEMP/upstream-pr.md" <<'BODY'
+          Merge the latest `Viemean/qmtui:tui` into this fork's `main`.
+
+          The `tui` branch mirrors upstream. Resolve conflicts while preserving this fork's macOS support and other extensions, then verify the Linux tests and macOS build before merging.
+
+          Use **Create a merge commit** to retain upstream ancestry. Do not squash or rebase this PR. GitHub may require **Approve workflows to run** for checks on an automatically created PR.
+          BODY
+
+          gh pr create --base main --head tui \
+            --title "chore: sync upstream tui" \
+            --body-file "$RUNNER_TEMP/upstream-pr.md" >> "$GITHUB_STEP_SUMMARY"

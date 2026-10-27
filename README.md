@@ -2,6 +2,8 @@
 
 `qmtui` 是一款运行于 Linux / macOS 终端的 QQ 音乐 TUI 客户端。
 
+本 fork 的分支职责和定期上游同步方式见 [Fork 维护说明](docs/maintenance.md)。
+
 ## macOS / M5 Mac 安装
 
 支持 **macOS 15 及以上、Apple Silicon（M1 / M2 / M3 / M4 / M5）**。
