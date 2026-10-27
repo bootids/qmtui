@@ -5,6 +5,7 @@ import fcntl
 import hashlib
 import json
 import os
+from contextlib import contextmanager
 from pathlib import Path
 import shutil
 import subprocess
@@ -29,7 +30,8 @@ def player_binary():
     return binary
 
 
-def toggle():
+@contextmanager
+def player_state():
     session = hashlib.sha256(os.environ["HERDR_SOCKET_PATH"].encode()).hexdigest()
     state_dir = Path(os.environ["HERDR_PLUGIN_STATE_DIR"])
     state_dir.mkdir(parents=True, exist_ok=True)
@@ -39,6 +41,24 @@ def toggle():
     with (state_dir / f"{session}.lock").open("w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         state = json.loads(state_path.read_text()) if state_path.exists() else {}
+        yield state
+        state_path.write_text(json.dumps(state) + "\n")
+
+
+def open_player(workspace_id):
+    player_binary()
+    result = herdr(
+        "plugin", "pane", "open",
+        "--plugin", os.environ["HERDR_PLUGIN_ID"],
+        "--entrypoint", "player",
+        "--workspace", workspace_id,
+        "--no-focus",
+    )
+    return result["plugin_pane"]["pane"]
+
+
+def toggle():
+    with player_state() as state:
         panes = herdr("pane", "list")["panes"]
         by_terminal = {pane["terminal_id"]: pane for pane in panes}
         context = json.loads(os.environ["HERDR_PLUGIN_CONTEXT_JSON"])
@@ -60,32 +80,49 @@ def toggle():
         if player:
             herdr("plugin", "pane", "focus", player["pane_id"])
         else:
-            player_binary()
-            result = herdr(
-                "plugin", "pane", "open",
-                "--plugin", os.environ["HERDR_PLUGIN_ID"],
-                "--entrypoint", "player",
-                "--workspace", current["workspace_id"],
-                "--no-focus",
-            )
-            player = result["plugin_pane"]["pane"]
+            player = open_player(current["workspace_id"])
 
         # Herdr 0.9.5 projects tab.focus to attached clients; plugin.pane.focus
         # only changes the server's default focus and can leave the UI unchanged.
         herdr("tab", "focus", player["tab_id"])
         state["player_terminal_id"] = player["terminal_id"]
         state["return_terminal_id"] = current["terminal_id"]
-        state_path.write_text(json.dumps(state) + "\n")
+
+
+def attach():
+    """Display the existing player without changing the native client's machine."""
+    with player_state() as state:
+        panes = herdr("pane", "list")["panes"]
+        player = next(
+            (pane for pane in panes if pane["terminal_id"] == state.get("player_terminal_id")),
+            None,
+        )
+        if player is None:
+            if panes:
+                source = next((pane for pane in panes if pane.get("focused")), panes[0])
+                workspace_id = source["workspace_id"]
+            else:
+                workspace_id = herdr(
+                    "workspace", "create", "--label", "qmtui", "--no-focus"
+                )["workspace"]["workspace_id"]
+            player = open_player(workspace_id)
+        state["player_terminal_id"] = player["terminal_id"]
+
+    # Release the startup lock before entering the interactive attachment.
+    binary = os.environ["HERDR_BIN_PATH"]
+    os.execv(binary, [binary, "terminal", "attach", player["terminal_id"], "--takeover"])
 
 
 if __name__ == "__main__":
     try:
         if sys.argv[1:] == ["toggle"]:
             toggle()
+        elif sys.argv[1:] == ["attach"]:
+            attach()
         elif sys.argv[1:] == ["run"]:
             binary = player_binary()
             os.execv(binary, [binary])
         else:
-            sys.exit("Usage: qmtui.py {toggle|run}")
+            sys.exit("Usage: qmtui.py {toggle|attach|run}")
     except (OSError, ValueError, KeyError, RuntimeError, subprocess.CalledProcessError) as error:
         sys.exit(f"qmtui: {error}")

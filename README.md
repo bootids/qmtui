@@ -4,7 +4,7 @@
 
 本 fork 的分支职责和定期上游同步方式见 [Fork 维护说明](docs/maintenance.md)。
 
-在 Herdr 中使用快捷键呼出播放器并保持后台播放，见 [Herdr 插件](plugins/herdr/README.md)。
+在 Herdr 中使用快捷键呼出播放器并保持后台播放，或使用 Kitty 的 `F8` / `F9` 跨机器呼出本机界面和悬浮窗口，见 [Herdr 插件](plugins/herdr/README.md)。
 
 ## macOS / M5 Mac 安装
 

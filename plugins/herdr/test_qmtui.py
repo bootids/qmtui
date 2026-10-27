@@ -9,6 +9,7 @@ import unittest
 from unittest.mock import patch
 
 import qmtui
+import kitty_launch
 
 
 class ToggleTests(unittest.TestCase):
@@ -23,6 +24,7 @@ class ToggleTests(unittest.TestCase):
             "HERDR_SOCKET_PATH": "/session-one/herdr.sock",
             "HERDR_PLUGIN_STATE_DIR": self.temp.name,
             "HERDR_PLUGIN_ID": "qmtui",
+            "HERDR_BIN_PATH": "/bin/herdr",
         }).start()
         self.api = patch.object(qmtui, "herdr", side_effect=self.herdr).start()
         patch.object(qmtui, "player_binary", return_value="/bin/qmtui").start()
@@ -108,6 +110,45 @@ class ToggleTests(unittest.TestCase):
         self.invoke()
         self.assertEqual(self.opens, 2)
         self.assertEqual(len(list(Path(self.temp.name).glob("*.json"))), 2)
+
+    def test_terminal_views_reuse_player_without_changing_work_tab(self):
+        with patch.object(qmtui.os, "execv") as execute:
+            qmtui.attach()
+            qmtui.attach()
+        self.assertEqual(self.opens, 1)
+        self.assertEqual(self.focused, "work")
+        self.assertEqual(execute.call_count, 2)
+        self.assertEqual(execute.call_args.args[1], [
+            "/bin/herdr", "terminal", "attach", "terminal-music-1", "--takeover",
+        ])
+
+    def test_tab_and_terminal_view_share_the_same_player(self):
+        self.invoke()
+        with patch.object(qmtui.os, "execv"):
+            qmtui.attach()
+        self.assertEqual(self.opens, 1)
+
+
+class LocalLauncherTests(unittest.TestCase):
+    def test_remote_context_cannot_retarget_host_shortcuts(self):
+        env = kitty_launch.local_environment({
+            "PATH": "/usr/bin",
+            "XDG_CONFIG_HOME": "/local/config",
+            "XDG_STATE_HOME": "/local/state",
+            "HERDR_SOCKET_PATH": "/remote/herdr.sock",
+            "HERDR_CONFIG_PATH": "/remote/config.toml",
+            "HERDR_SESSION": "remote-session",
+            "HERDR_BIN_PATH": "/remote/herdr",
+            "HERDR_PANE_ID": "remote:pane",
+            "HERDR_WORKSPACE_ID": "remote:workspace",
+        })
+        self.assertEqual(env["HERDR_SOCKET_PATH"], "/local/config/herdr/herdr.sock")
+        self.assertEqual(env["HERDR_CONFIG_PATH"], "/local/config/herdr/config.toml")
+        self.assertEqual(env["HERDR_PLUGIN_STATE_DIR"], "/local/state/herdr/plugins/qmtui")
+        self.assertNotIn("HERDR_SESSION", env)
+        self.assertNotIn("HERDR_BIN_PATH", env)
+        self.assertNotIn("HERDR_PANE_ID", env)
+        self.assertNotIn("HERDR_WORKSPACE_ID", env)
 
 
 if __name__ == "__main__":

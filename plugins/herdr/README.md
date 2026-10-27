@@ -6,6 +6,31 @@
 
 要求：Linux / macOS、Herdr **0.9.5+**、Python **3.9+**，以及可独立运行的 `qmtui`。
 
+## Kitty 跨机器快捷键
+
+安装本机 Herdr 插件后，可给 Kitty 增加两个固定连接 **Local** 的入口：
+
+| 快捷键 | 效果 |
+| --- | --- |
+| `F8` | 在 Kitty 标签页中显示本机 qmtui |
+| `F9` | 在覆盖当前 Kitty 窗口的叠加窗口中显示本机 qmtui |
+| 播放器中的 `F8` / `F9` | 收起当前显示窗口，音乐继续后台播放 |
+| 播放器中的 `Ctrl+B`，然后 `q` | 断开当前显示窗口，音乐继续后台播放 |
+
+这两个入口不受 Herdr 当前选中机器影响，操作同一个 Local 播放器。新入口会接管已有显示连接，避免多个窗口同时输入；收起显示连接不会退出播放器。在 qmtui 中按 `Q` 并确认退出会停止播放器。
+
+在仓库根目录安装本机启动器和 Kitty 配置：
+
+```sh
+mkdir -p "$HOME/.local/bin" "$HOME/.config/kitty"
+install -m 755 plugins/herdr/kitty_launch.py "$HOME/.local/bin/qmtui-local"
+cp plugins/herdr/kitty.conf "$HOME/.config/kitty/qmtui.conf"
+```
+
+在 Kitty 的 `kitty.conf` 末尾添加一次 `include qmtui.conf`，然后按 `Ctrl+Shift+F5` 重载配置。Kitty 的启动环境需能从 `PATH` 找到 `qmtui-local`、`herdr` 和 `python3`；本机 Local Herdr 服务端需保持运行。
+
+启动器每次从本机插件注册信息寻找当前代码，因此 `herdr plugin update qmtui` 后会自动使用更新后的播放器连接逻辑。更改 `kitty_launch.py` 或 `kitty.conf` 时需重新执行上面的复制命令。
+
 ## 本地安装
 
 在仓库根目录运行：
