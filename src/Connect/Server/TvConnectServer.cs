@@ -14,6 +14,7 @@ public sealed class TvConnectServer : IDisposable
 {
     private readonly ConnectStorage _storage;
     private readonly int _port;
+    private readonly System.Threading.Lock _gate = new();
     private HttpListener? _listener;
     private CancellationTokenSource? _cts;
     private sealed class ClientSession : IDisposable
@@ -135,87 +136,86 @@ public sealed class TvConnectServer : IDisposable
     /// </summary>
     public void Start()
     {
-        if (_listener != null && _listener.IsListening) return;
-
-        _cts = new CancellationTokenSource();
-        var cancellationToken = _cts.Token;
-        int initialCandidate = FindAvailablePort(_port);
-
-        for (int candidate = initialCandidate; candidate <= _port + 10; candidate++)
+        lock (_gate)
         {
-            HttpListener? testListener = null;
-            try
-            {
-                testListener = new HttpListener();
-                testListener.Prefixes.Add($"http://*:{candidate}/");
-                testListener.Start();
-                _listener = testListener;
-                ActualPort = candidate;
-                AppLogger.Info("TvConnectServer", $"Melodist Connect WebSocket Server listening on port {ActualPort}");
-                break;
-            }
-            catch (Exception ex)
-            {
-                AppLogger.Warn("TvConnectServer", $"Could not bind to http://*:{candidate}/: {ex.Message}");
-                try { testListener?.Close(); } catch { }
+            if (_listener != null && _listener.IsListening) return;
 
+            _cts?.Dispose();
+            _cts = new CancellationTokenSource();
+            var cancellationToken = _cts.Token;
+            int initialCandidate = FindAvailablePort(_port);
+
+            for (int candidate = initialCandidate; candidate <= _port + 10; candidate++)
+            {
+                HttpListener? testListener = null;
                 try
                 {
                     testListener = new HttpListener();
-                    testListener.Prefixes.Add($"http://+:{candidate}/");
+                    testListener.Prefixes.Add($"http://*:{candidate}/");
                     testListener.Start();
                     _listener = testListener;
                     ActualPort = candidate;
-                    AppLogger.Info("TvConnectServer", $"Melodist Connect WebSocket Server listening on port {ActualPort} via prefix +");
-                    break;
-                }
-                catch (Exception ex2)
-                {
-                    AppLogger.Warn("TvConnectServer", $"Could not bind to http://+:{candidate}/: {ex2.Message}");
-                    try { testListener?.Close(); } catch { }
-                }
-            }
-        }
-
-        if (_listener == null || !_listener.IsListening)
-        {
-            AppLogger.Error("TvConnectServer", "Failed to start HttpListener on any port in range 8765-8775", null);
-            return;
-        }
-
-        // Keep each run tied to its own listener and token. Stop clears the fields,
-        // and a subsequent Start may replace them before this loop has finished.
-        var listener = _listener;
-        AcceptLoopCompletion = Task.Run(async () =>
-        {
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                try
-                {
-                    var ctx = await listener.GetContextAsync().ConfigureAwait(false);
-                    if (ctx.Request.IsWebSocketRequest)
-                    {
-                        _ = ProcessWebSocketRequestAsync(ctx, cancellationToken);
-                    }
-                    else
-                    {
-                        _ = ProcessHttpRequestAsync(ctx);
-                    }
-                }
-                catch (HttpListenerException) when (cancellationToken.IsCancellationRequested)
-                {
-                    break;
-                }
-                catch (ObjectDisposedException) when (cancellationToken.IsCancellationRequested)
-                {
+                    AppLogger.Info("TvConnectServer", $"Melodist Connect WebSocket Server listening on port {ActualPort}");
                     break;
                 }
                 catch (Exception ex)
                 {
-                    AppLogger.Warn("TvConnectServer", $"Error accepting HTTP context: {ex.Message}");
+                    AppLogger.Warn("TvConnectServer", $"Could not bind to http://*:{candidate}/: {ex.Message}");
+                    try { testListener?.Close(); } catch { }
+
+                    try
+                    {
+                        testListener = new HttpListener();
+                        testListener.Prefixes.Add($"http://+:{candidate}/");
+                        testListener.Start();
+                        _listener = testListener;
+                        ActualPort = candidate;
+                        AppLogger.Info("TvConnectServer", $"Melodist Connect WebSocket Server listening on port {ActualPort} via prefix +");
+                        break;
+                    }
+                    catch (Exception ex2)
+                    {
+                        AppLogger.Warn("TvConnectServer", $"Could not bind to http://+:{candidate}/: {ex2.Message}");
+                        try { testListener?.Close(); } catch { }
+                    }
                 }
             }
-        });
+
+            if (_listener == null || !_listener.IsListening)
+            {
+                AppLogger.Error("TvConnectServer", "Failed to start HttpListener on any port in range 8765-8775", null);
+                return;
+            }
+
+            var activeListener = _listener;
+            AcceptLoopCompletion = Task.Run(async () =>
+            {
+                while (!cancellationToken.IsCancellationRequested && activeListener.IsListening)
+                {
+                    try
+                    {
+                        var ctx = await activeListener.GetContextAsync().ConfigureAwait(false);
+                        if (ctx.Request.IsWebSocketRequest)
+                        {
+                            _ = ProcessWebSocketRequestAsync(ctx, cancellationToken);
+                        }
+                        else
+                        {
+                            _ = ProcessHttpRequestAsync(ctx);
+                        }
+                    }
+                    catch (Exception ex) when (cancellationToken.IsCancellationRequested &&
+                        ex is HttpListenerException or ObjectDisposedException or OperationCanceledException)
+                    {
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        AppLogger.Warn("TvConnectServer", $"Error accepting HTTP context: {ex.Message}");
+                    }
+                }
+            });
+        }
     }
 
     private async Task ProcessWebSocketRequestAsync(HttpListenerContext ctx, CancellationToken cancellationToken)
@@ -688,20 +688,22 @@ public sealed class TvConnectServer : IDisposable
     /// </summary>
     public void Stop()
     {
-        _cts?.Cancel();
-        _cts = null;
-        try
+        lock (_gate)
         {
-            _listener?.Stop();
-            _listener?.Close();
+            _cts?.Cancel();
+            try
+            {
+                _listener?.Stop();
+                _listener?.Close();
+            }
+            catch { }
+            _listener = null;
+            foreach (var session in _activeClients.Values)
+            {
+                session.Dispose();
+            }
+            _activeClients.Clear();
         }
-        catch { }
-        _listener = null;
-        foreach (var session in _activeClients.Values)
-        {
-            session.Dispose();
-        }
-        _activeClients.Clear();
     }
 
     private async Task ProcessHttpRequestAsync(HttpListenerContext ctx)
@@ -963,5 +965,10 @@ public sealed class TvConnectServer : IDisposable
     public void Dispose()
     {
         Stop();
+        lock (_gate)
+        {
+            _cts?.Dispose();
+            _cts = null;
+        }
     }
 }

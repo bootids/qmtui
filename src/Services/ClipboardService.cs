@@ -32,7 +32,7 @@ public static class ClipboardService
             }
         }
 
-        // 2. X11 环境（或 Wayland 未能成功）尝试 xclip / xsel
+        // X11 环境（或 Wayland 未能成功）尝试 xclip / xsel
         if (!success && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DISPLAY")))
         {
             if (TryRunWithStdin("xclip", text, "-selection", "clipboard") ||
@@ -42,7 +42,7 @@ public static class ClipboardService
             }
         }
 
-        // 3. 增强：发送 ANSI OSC 52 剪贴板转义码至标准输出（兼容现代终端如 Kitty, Alacritty, Konsole 等）
+        // 增强：发送 ANSI OSC 52 剪贴板转义码至标准输出（兼容现代终端如 Kitty, Alacritty, Konsole 等）
         try
         {
             var base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(text));
@@ -80,7 +80,7 @@ public static class ClipboardService
             if (!string.IsNullOrEmpty(text)) return text;
         }
 
-        // 2. X11 环境（或 Wayland 未能成功）尝试 xclip / xsel
+        // X11 环境（或 Wayland 未能成功）尝试 xclip / xsel
         if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DISPLAY")))
         {
             var text = primary

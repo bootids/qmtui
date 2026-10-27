@@ -53,7 +53,11 @@ public sealed partial class MainWindow
 
     private Task PlaySongAsync(Song song) => PlaySongAsync(song, 0, null);
 
-    private async Task PlaySongAsync(Song song, double startPosition = 0, string? overridePlayUrl = null)
+    private async Task PlaySongAsync(
+        Song song,
+        double startPosition = 0,
+        string? overridePlayUrl = null,
+        bool allowRemoteStreamRequest = true)
     {
         if (ListenTogetherManager.Instance.IsInRoom && ListenTogetherManager.IsLocalOrWebDavSong(song))
         {
@@ -107,12 +111,29 @@ public sealed partial class MainWindow
 
         bool IsStale() => ct.IsCancellationRequested || Interlocked.Read(ref _playbackSessionId) != currentSession;
 
-        // 对齐官方双向反向接力：若为移动端本地曲目且 PC 本地不存在物理文件，向移动端请求 HTTP 串流代理
+        string? effectivePlayUrl = overridePlayUrl;
+        if (string.IsNullOrEmpty(effectivePlayUrl))
+        {
+            if (!string.IsNullOrEmpty(song.PlayUrl) &&
+                (song.PlayUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                 song.PlayUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase)))
+            {
+                effectivePlayUrl = song.PlayUrl;
+            }
+            else if (!string.IsNullOrEmpty(song.MediaMid) &&
+                     (song.MediaMid.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                      song.MediaMid.StartsWith("https://", StringComparison.OrdinalIgnoreCase)))
+            {
+                effectivePlayUrl = song.MediaMid;
+            }
+        }
+
+        // 移动端本地曲目且 PC 本地不存在物理文件时向移动端请求 HTTP 串流代理
         bool isLocalSong = !song.IsWebDav && (song.IsLocal || song.Mid.StartsWith("local_", StringComparison.OrdinalIgnoreCase));
         bool directFileExists = !string.IsNullOrEmpty(song.LocalFilePath) && File.Exists(song.LocalFilePath);
-        if (isLocalSong && !directFileExists && string.IsNullOrEmpty(overridePlayUrl))
+        if (isLocalSong && !directFileExists && string.IsNullOrEmpty(effectivePlayUrl))
         {
-            if (_connectServer != null && _connectServer.IsRunning && _connectServer.ConnectedCount > 0)
+            if (allowRemoteStreamRequest && _connectServer != null && _connectServer.IsRunning && _connectServer.ConnectedCount > 0)
             {
                 AppLogger.Info("MainWindow.Playback", $"Local song file not found on PC ({song.LocalFilePath}), requesting mobile stream proxy for {song.Title}");
                 var connectSong = ConnectSong.FromDomainSong(song, _actualQualityTier, _connectServer.ActualPort);
@@ -122,6 +143,13 @@ public sealed partial class MainWindow
                 _controlBar.SetCurrentSong(song);
                 _controlBar.UpdateStatus($"[等待串流] 正在请求手机端中转: {song.Title} ...");
                 _connectServer.BroadcastPlaySong(connectSong);
+                return;
+            }
+
+            if (!allowRemoteStreamRequest)
+            {
+                AppLogger.Warn("MainWindow.Playback", $"Received remote playback command for local song but file not found on PC and no stream URL provided: {song.Title}");
+                _controlBar.UpdateStatus($"[加载失败] 远端未提供串流地址: {song.Title}");
                 return;
             }
         }
@@ -270,9 +298,9 @@ public sealed partial class MainWindow
         string? playUrl;
         List<LyricLine> lyrics;
 
-        if (!string.IsNullOrEmpty(overridePlayUrl))
+        if (!string.IsNullOrEmpty(effectivePlayUrl))
         {
-            playUrl = overridePlayUrl;
+            playUrl = effectivePlayUrl;
             _actualQualityTier = AudioQualityHelper.DetermineLocalOrWebDavTier(song.Quality, playUrl);
             Application.Invoke(() => _controlBar.UpdateQuality(AudioQualityHelper.GetBadge(_actualQualityTier)));
             if (!string.IsNullOrEmpty(song.Mid) && !song.IsLocal && !song.IsWebDav)
@@ -308,7 +336,7 @@ public sealed partial class MainWindow
             if (server != null && !string.IsNullOrEmpty(song.WebDavHref))
             {
                 var localCache = WebDavService.GetLocalCachePath(server, song.WebDavHref);
-                // 1. 若本地完整缓存已存在且有效，直接播放本地文件
+                // 若本地完整缓存已存在且有效，直接播放本地文件
                 if (File.Exists(localCache) && new FileInfo(localCache).Length > 4096)
                 {
                     playUrl = localCache;
@@ -317,7 +345,7 @@ public sealed partial class MainWindow
                 }
                 else
                 {
-                    // 2. 本地尚未缓存：直接使用流式直链 URL 起播，无需等待音频全部缓冲完毕
+                    // 本地尚未缓存：直接使用流式直链 URL 起播，无需等待音频全部缓冲完毕
                     Application.Invoke(() =>
                     {
                         if (IsStale()) return;
@@ -979,14 +1007,14 @@ public sealed partial class MainWindow
 
             if (nextSong != null && !nextSong.IsLocal && !string.IsNullOrEmpty(nextSong.Mid))
             {
-                // 1. 如果本地已有音频缓存，无需网络预热
+                // 如果本地已有音频缓存，无需网络预热
                 var cached = AudioCacheService.GetCachedAudioPath(nextSong.Mid, _preferredQualityTier);
                 if (!string.IsNullOrEmpty(cached)) return;
 
-                // 2. 预热本地封面
+                // 预热本地封面
                 _ = TerminalImageHelper.EnsureSongCoverAsync(nextSong);
 
-                // 3. 预解析下一首音源链接并缓存
+                // 预解析下一首音源链接并缓存
                 var cacheKey = $"{nextSong.Mid}_{(int)_preferredQualityTier}";
                 lock (s_prefetchLock)
                 {
