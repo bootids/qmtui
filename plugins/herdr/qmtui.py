@@ -66,10 +66,13 @@ def toggle():
                 "--plugin", os.environ["HERDR_PLUGIN_ID"],
                 "--entrypoint", "player",
                 "--workspace", current["workspace_id"],
-                "--focus",
+                "--no-focus",
             )
             player = result["plugin_pane"]["pane"]
 
+        # Herdr 0.9.5 projects tab.focus to attached clients; plugin.pane.focus
+        # only changes the server's default focus and can leave the UI unchanged.
+        herdr("tab", "focus", player["tab_id"])
         state["player_terminal_id"] = player["terminal_id"]
         state["return_terminal_id"] = current["terminal_id"]
         state_path.write_text(json.dumps(state) + "\n")

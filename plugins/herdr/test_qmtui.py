@@ -45,12 +45,12 @@ class ToggleTests(unittest.TestCase):
             return {"panes": copy.deepcopy(self.panes)}
         if args[:3] == ("plugin", "pane", "open"):
             self.opens += 1
-            player = self.pane(f"music-{self.opens}", f"terminal-music-{self.opens}", "tab-music")
+            player = self.pane(f"music-{self.opens}", f"terminal-music-{self.opens}", f"tab-music-{self.opens}")
             self.panes.append(player)
-            self.focused = player["pane_id"]
+            # Opening a plugin pane does not change an attached client's view.
             return {"plugin_pane": {"pane": player}}
         if args[:3] == ("plugin", "pane", "focus"):
-            self.focused = args[3]
+            # Herdr 0.9.5 changes server focus here, not the client's visible tab.
             return {}
         if args[:2] == ("tab", "focus"):
             self.focused = next(p["pane_id"] for p in self.panes if p["tab_id"] == args[2])

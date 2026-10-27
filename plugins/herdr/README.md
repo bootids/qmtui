@@ -22,6 +22,8 @@ herdr server reload-config
 
 快捷键可以修改为其他未占用组合，例如 `key = "f8"`。不要重复添加同一绑定。
 
+插件在当前选中的 Herdr 服务端执行。本机 Linux 播放需先在机器列表选择 **Local**；即使客户端运行在 Linux，选中 MacMini 等 SSH 远端时，使用的也是远端的插件和自定义命令配置。本机安装不会自动安装到远端。
+
 也可以在 Herdr 中手动调用：
 
 ```sh
